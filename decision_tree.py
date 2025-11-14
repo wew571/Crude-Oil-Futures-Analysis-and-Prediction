@@ -124,6 +124,7 @@ class DecisionTree:
             feature_value = X[: , feature_index]
 
             for threshold in feature_value:
+                # Chia dữ liệu thành 2 nửa
                 left_mask = X[:, feature_index] <= threshold
                 right_mask = ~left_mask
 
@@ -136,15 +137,44 @@ class DecisionTree:
                 n_left = len(y[left_mask])
                 n_right = len(y[right_mask])
 
+                # Tính MSE_children (MSE(c)) avf MSE_reduction(MSE(r))
                 mse_children = n_left/n * mse_left + n_right/n * mse_right
                 mse_reduction = mse_parent - mse_children
 
+                # Tìm MSE_reduction tốt nhất
                 if mse_reduction > best_mse_reduction:
                     best_mse_reduction = mse_reduction
                     best_threshold = threshold
                     best_feature = feature_index
 
-        return best_mse_reduction , best_threshold , best_feature
+        return best_feature , best_threshold , best_mse_reduction
+
+    def build_tree(self , X , y , depth = 0):
+        """Build cây quyết định"""
+        n = len(y)
+        if depth >= self.max_depth or n < self.min_split:
+            return Node(value=numpy.mean(y))
+
+        feature , threshold , mse_reduction = self.find_best_split_regression(X , y)
+
+        if feature is None or mse_reduction <= 0:
+            return Node(value=numpy.mean(y))
+
+        # chia dữ liệu thành 2 nửa
+        left_mask = X[ : , feature] <= threshold
+        right_mask = ~left_mask
+
+        # Build nhánh cây
+        left = self.build_tree(X[left_mask] , y[left_mask] , depth = depth + 1)
+        right = self.build_tree(X[right_mask] , y[right_mask] , depth = depth + 1)
+
+        return Node(feature_index = feature , threshold = threshold , left = left , right = right)
+
+    def fit(self , X , y):
+        """ Dùng để Train mô hình """
+        self.root = self.build_tree( X , y)
+
+
 
 
 

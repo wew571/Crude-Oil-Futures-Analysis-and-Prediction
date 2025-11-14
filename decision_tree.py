@@ -168,19 +168,14 @@ class DecisionTree:
         left = self.build_tree(X[left_mask] , y[left_mask] , depth = depth + 1)
         right = self.build_tree(X[right_mask] , y[right_mask] , depth = depth + 1)
 
-        return Node(feature_index = feature , threshold = threshold , left = left , right = right)
+        return Node(
+                    value = None ,
+                    feature_index = feature ,
+                    threshold = threshold ,
+                    left = left ,
+                    right = right)
 
     def fit(self , X , y):
         """ Dùng để Train mô hình """
         self.root = self.build_tree( X , y)
-
-
-
-
-
-
-
-
-
-
 

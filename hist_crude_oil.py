@@ -81,7 +81,7 @@ def crude_oil_hist(
     return df
 
 
-def main():
+def draw():
     """CLI: cho phép chạy trực tiếp file này như một script."""
     parser = argparse.ArgumentParser(description="Vẽ histogram cho dữ liệu Crude Oil Futures.")
     parser.add_argument(

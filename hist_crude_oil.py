@@ -118,5 +118,3 @@ def main():
         show=not args.no_show,
         save_dir=args.save_dir,
     )
-if __name__ == "__main__":
-    main()

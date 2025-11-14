@@ -128,3 +128,16 @@ class DecisionTree:
         """ Dùng để Train mô hình """
         self.root = self.build_tree( X , y)
 
+    def predict(self , x , node = None):
+        """ Duyệt cây """
+        if node is None:
+            node = self.root
+
+        while node.feature_index is not None:
+            if x[node.feature_index] <= node.threshold:
+                node = node.left
+            else:
+                node = node.right
+        return node.value
+
+

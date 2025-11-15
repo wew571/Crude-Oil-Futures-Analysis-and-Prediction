@@ -3,7 +3,7 @@ import numpy
 import decision_tree_regression
 
 class RandomForestRegression:
-    def __init__(self , n_tree = 25 , max_depth = 9 , min_split = 2 , n_feature = None):
+    def __init__(self , n_tree = 20 , max_depth = 7 , min_split = 2 , n_feature = None):
         self.n_tree = n_tree
         self.max_depth = max_depth
         self.min_split = min_split

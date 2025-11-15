@@ -106,6 +106,27 @@ class DecisionTree:
 
         feature , threshold , mse_reduction = self.find_best_split_regression(X , y)
 
+        # ---- Giải thích tại sao lại là value=numpy.mean(y)-----
+        # Theo công thức tính MSE sẽ là :
+        #                       1
+        #            MSE    = ----- Σ[ (y - ȳ)² ]
+        #                       n
+        # Đặt ȳ là c :
+        #                       1
+        #            MSE(c) = ----- Σ[ (y - c)² ]
+        #                       n
+        #
+        #            => L(c) = Σ[ y² - 2yc + c² ]
+        #            -> L(c) = Σ[y²] - 2cΣ[y] + nc²         { Σc² = nc² }
+        # Để c có nghiệm thì phải đạo hàm MSE(c) theo c :
+        #            L'(c) = -2Σ[y] + 2nc
+        #
+        # Cho đạo hàm bằng 0 để có nghiệm :
+        #            nc - Σ[y] = 0
+        #                      1
+        #            <=> c = ------ Σ[y]
+        #                      n
+        #  Đây chính là công thức của trung bình cộng nha
         if feature is None or mse_reduction <= 0:
             return Node(value=numpy.mean(y))
 
@@ -128,16 +149,19 @@ class DecisionTree:
         """ Dùng để Train mô hình """
         self.root = self.build_tree( X , y)
 
-    def predict(self , x , node = None):
+    def predict_one(self , X , node = None):
         """ Duyệt cây """
         if node is None:
             node = self.root
 
         while node.feature_index is not None:
-            if x[node.feature_index] <= node.threshold:
+            if X[node.feature_index] <= node.threshold:
                 node = node.left
             else:
                 node = node.right
         return node.value
 
+    def predict(self , X ):
+        value = numpy.array([self.predict_one(x) for x in X])
+        return value
 

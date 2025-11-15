@@ -10,7 +10,7 @@ class Node:
         self.right = right
 
 class DecisionTree:
-    def __init__(self , max_depth = 9 , min_split = 2):
+    def __init__(self , max_depth = 7 , min_split = 2):
         self.max_depth = max_depth
         self.min_split = min_split
         self.root = None

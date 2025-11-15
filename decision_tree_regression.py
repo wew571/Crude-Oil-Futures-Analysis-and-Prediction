@@ -10,7 +10,7 @@ class Node:
         self.right = right
 
 class DecisionTree:
-    def __init__(self , max_depth = 5 , min_split = 2):
+    def __init__(self , max_depth = 25 , min_split = 2):
         self.max_depth = max_depth
         self.min_split = min_split
         self.root = None
@@ -20,7 +20,7 @@ class DecisionTree:
         Tính MSE ( Mean Square Error ) cho 1 node:
 
         Parameters:
-            y : array-like
+            y : target value
 
         Returns:
             value : float
@@ -43,7 +43,7 @@ class DecisionTree:
 
         Parameters:
             X : feature
-            y : label
+            y : target value
 
         Returns:
 

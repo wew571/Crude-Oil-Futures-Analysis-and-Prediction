@@ -8,8 +8,13 @@ import matplotlib.pyplot as plt
 DEFAULT_COLS = ("open", "high", "low", "close", "volume")
 
 
+def get_data() -> pd.DataFrame:
+    """ Lấy dữ liệu của file csv"""
+    data = pd.read_csv('Crude_Oil_Futures.csv')
+    return data
+
 #Đọc csv dầu thô, vẽ histogram cho các cột số
-def crude_oil_hist( 
+def crude_oil_hist(
     csv_path: Optional[Union[str, Path]] = None,
     cols: Optional[Iterable[str]] = None,
     bins: Union[int, str] = 50,
@@ -40,7 +45,7 @@ def crude_oil_hist(
     df = pd.read_csv(csv_path)
     df.columns = [c.lower().strip() for c in df.columns]
 
-    # 3) Ép kiểu số cho các cột cần thiết   
+    # 3) Ép kiểu số cho các cột cần thiết
     use_cols = cols if cols is not None else DEFAULT_COLS
     for col in use_cols:
         if col in df.columns:

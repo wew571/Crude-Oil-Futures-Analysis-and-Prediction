@@ -118,9 +118,9 @@ class OilPriceApp:
         ttk.Button(viz_frame , text="Pair Plot",
                    command=self.show_pair_plot).grid(row=2, column=0, sticky=(tk.W, tk.E), pady=2)
         ttk.Button(viz_frame, text="Prediction Plot",
-                   command=self.show_prediction_plot).grid(row=4, column=0, sticky=(tk.W, tk.E), pady=2)
-        ttk.Button(viz_frame, text="Prediction Results",
-                   command=self.show_predictions).grid(row=3, column=0, sticky=(tk.W, tk.E), pady=2)
+                   command=self.show_prediction_plot).grid(row=3, column=0, sticky=(tk.W, tk.E), pady=2)
+        # ttk.Button(viz_frame, text="Prediction Results",
+        #            command=self.show_predictions).grid(row=3, column=0, sticky=(tk.W, tk.E), pady=2)
         # Prediction section
         pred_frame = ttk.LabelFrame(left_frame, text="Manual Prediction", padding="5")
         pred_frame.grid(row=5, column=0, sticky=(tk.W, tk.E))
@@ -219,9 +219,34 @@ class OilPriceApp:
 
     def _train_model_thread(self, selected_features, target):
         try:
-            # Prepare data
-            X = self.df[selected_features].values
-            y = self.df[target].values
+            # Xử lý datetime columns trong training
+            processed_df = self.df.copy()
+            self.datetime_features = []
+
+            for feature in selected_features:
+                if processed_df[feature].dtype == 'object':
+                    try:
+                        # Thử convert sang datetime
+                        processed_df[feature] = pd.to_datetime(processed_df[feature], errors='coerce')
+                        # Kiểm tra xem có convert thành công không
+                        if not processed_df[feature].isna().all():
+                            # Chuyển thành timestamp và convert sang float
+                            processed_df[feature] = (processed_df[feature].astype('int64') // 10 ** 9).astype(
+                                np.float64)
+                            self.datetime_features.append(feature)
+                            print(f"Converted datetime feature: {feature} to float")
+                        else:
+                            print(f"Feature {feature} cannot be converted to datetime")
+                    except Exception as e:
+                        print(f"Error converting {feature} to datetime: {str(e)}")
+
+            # Prepare data - ĐẢM BẢO TẤT CẢ LÀ FLOAT
+            X = processed_df[selected_features].astype(np.float64).values
+            y = processed_df[target].astype(np.float64).values
+
+            print(f"X shape: {X.shape}, X dtype: {X.dtype}")
+            print(f"y shape: {y.shape}, y dtype: {y.dtype}")
+            print(f"Datetime features: {self.datetime_features}")
 
             # Split data
             test_size = float(self.test_size_var.get())
@@ -238,8 +263,14 @@ class OilPriceApp:
 
             self.model.fit(self.X_train, self.y_train)
 
+            print("Model training completed successfully")
+
             # Update UI in main thread
             self.root.after(0, self._training_complete)
+
+        except Exception as e:
+            print(f"Training error: {str(e)}")
+            self.root.after(0, lambda: self._training_error(str(e)))
 
         except Exception as e:
             self.root.after(0, lambda: self._training_error(str(e)))
@@ -263,17 +294,46 @@ class OilPriceApp:
             widget.destroy()
 
         self.pred_inputs = {}
+        self.datetime_features = []  # Lưu danh sách các feature là datetime
 
         # Get feature names
         selected_features = [self.feature_listbox.get(i) for i in self.feature_listbox.curselection()]
 
         # Create input fields for each feature
-        for i, feature in enumerate(selected_features):
-            ttk.Label(self.pred_frame_inner, text=f"{feature}:").grid(row=i, column=0, sticky=tk.W)
-            var = tk.StringVar()
-            entry = ttk.Entry(self.pred_frame_inner, textvariable=var)
-            entry.grid(row=i, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
+        row_counter = 0
+        for feature in selected_features:
+            # Kiểm tra nếu cột là datetime
+            is_datetime = False
+            if self.df[feature].dtype == 'object':
+                try:
+                    # Thử convert sang datetime để kiểm tra
+                    pd.to_datetime(self.df[feature].head())
+                    is_datetime = True
+                    self.datetime_features.append(feature)  # Lưu lại feature datetime
+                except:
+                    pass
+
+            ttk.Label(self.pred_frame_inner, text=f"{feature}:").grid(row=row_counter, column=0, sticky=tk.W)
+
+            if is_datetime:
+                # Tạo entry cho datetime với placeholder
+                var = tk.StringVar()
+                entry = ttk.Entry(self.pred_frame_inner, textvariable=var)
+                entry.grid(row=row_counter, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
+
+                # Thêm hint cho format datetime
+                hint_label = ttk.Label(self.pred_frame_inner,
+                                       text="(YYYY-MM-DD or DD/MM/YYYY)",
+                                       foreground="gray", font=('Arial', 8))
+                hint_label.grid(row=row_counter, column=2, sticky=tk.W, padx=(5, 0))
+
+            else:
+                var = tk.StringVar()
+                entry = ttk.Entry(self.pred_frame_inner, textvariable=var)
+                entry.grid(row=row_counter, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
+
             self.pred_inputs[feature] = var
+            row_counter += 1
 
     def manual_predict(self):
         if self.model is None:
@@ -285,17 +345,80 @@ class OilPriceApp:
             input_values = []
             selected_features = [self.feature_listbox.get(i) for i in self.feature_listbox.curselection()]
 
+            print(f"Selected features: {selected_features}")
+            print(f"Datetime features: {getattr(self, 'datetime_features', [])}")
+
             for feature in selected_features:
-                value = float(self.pred_inputs[feature].get())
-                input_values.append(value)
+                value_str = self.pred_inputs[feature].get().strip()
+
+                if not value_str:
+                    messagebox.showerror("Error", f"Please enter value for {feature}")
+                    return
+
+                # Kiểm tra nếu feature là datetime
+                is_datetime = hasattr(self, 'datetime_features') and feature in self.datetime_features
+
+                if is_datetime:
+                    # Xử lý datetime input
+                    try:
+                        date_val = pd.to_datetime(value_str, dayfirst=True, errors='coerce')
+                        if pd.isna(date_val):
+                            date_val = pd.to_datetime(value_str, errors='coerce')
+
+                        if pd.isna(date_val):
+                            messagebox.showerror("Error",
+                                                 f"Invalid date format for {feature}. Use YYYY-MM-DD or DD/MM/YYYY")
+                            return
+
+                        # Chuyển thành timestamp và convert sang float
+                        timestamp = float(date_val.timestamp())
+                        input_values.append(timestamp)
+                        print(f"Datetime feature '{feature}': '{value_str}' -> {timestamp}")
+
+                    except Exception as e:
+                        messagebox.showerror("Error",
+                                             f"Error processing date for {feature}: {str(e)}")
+                        return
+                else:
+                    # Xử lý numerical input - ĐẢM BẢO LÀ FLOAT
+                    try:
+                        numeric_value = float(value_str)
+                        input_values.append(numeric_value)
+                        print(f"Numerical feature '{feature}': '{value_str}' -> {numeric_value}")
+                    except ValueError:
+                        messagebox.showerror("Error",
+                                             f"Please enter valid number for {feature}")
+                        return
+
+            # Debug: kiểm tra input values
+            print(f"Final input values: {input_values}")
+            print(f"Input types: {[type(x) for x in input_values]}")
+
+            # ĐẢM BẢO INPUT LÀ NUMPY ARRAY VỚI DTYPE FLOAT
+            X_pred = np.array([input_values], dtype=np.float64)
+            print(f"Input array shape: {X_pred.shape}")
+            print(f"Input array dtype: {X_pred.dtype}")
 
             # Make prediction
-            prediction = self.model.predict(np.array([input_values]))[0]
-            self.pred_result.config(text=f"Predicted: {prediction:.4f}")
+            prediction = self.model.predict(X_pred)[0]
 
-        except ValueError:
-            messagebox.showerror("Error", "Please enter valid numbers for all features")
+            # Hiển thị kết quả
+            result_text = f"Predicted: {prediction:.4f}"
+
+            # Hiển thị thông tin datetime đã nhập (nếu có)
+            datetime_inputs = []
+            for feature in selected_features:
+                if hasattr(self, 'datetime_features') and feature in self.datetime_features:
+                    datetime_inputs.append(f"{feature}: {self.pred_inputs[feature].get()}")
+
+            if datetime_inputs:
+                result_text += f"\nDate inputs: {', '.join(datetime_inputs)}"
+
+            self.pred_result.config(text=result_text)
+            print(f"Prediction result: {prediction}")
+
         except Exception as e:
+            print(f"Prediction error: {str(e)}")
             messagebox.showerror("Error", f"Prediction failed: {str(e)}")
 
     def update_evaluation(self):
@@ -442,8 +565,9 @@ class OilPriceApp:
                             variable=self.corr_method, value="pearson").pack(anchor=tk.W, padx=20)
             ttk.Radiobutton(self.corr_popup, text="Spearman",
                             variable=self.corr_method, value="spearman").pack(anchor=tk.W, padx=20)
-            ttk.Radiobutton(self.corr_popup, text="Kendall",
-                            variable=self.corr_method, value="kendall").pack(anchor=tk.W, padx=20)
+            # Hàng cấm dùng
+            #ttk.Radiobutton(self.corr_popup, text="Kendall",
+                            #variable=self.corr_method, value="kendall").pack(anchor=tk.W, padx=20)
 
             def calculate_correlation():
                 method = self.corr_method.get()
@@ -474,7 +598,7 @@ class OilPriceApp:
             # Hiển thị giá trị trên heatmap
             for i in range(len(corr_matrix.columns)):
                 for j in range(len(corr_matrix.columns)):
-                    text = ax.text(j, i, f'{corr_matrix.iloc[i, j]:.2f}',
+                    text = ax.text(j, i, f'{corr_matrix.iloc[i, j]:.3f}',
                                    ha="center", va="center", color="black", fontsize=10)
 
             # Thiết lập ticks và labels
@@ -498,50 +622,45 @@ class OilPriceApp:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to create correlation matrix: {str(e)}")
 
-    def show_predictions(self):
-        if self.model is None or self.X_test is None:
-            messagebox.showerror("Error", "Please train a model first")
-            return
+    # def show_predictions(self):
+    #     if self.model is None or self.X_test is None:
+    #         messagebox.showerror("Error", "Please train a model first")
+    #         return
+    #
+    #     self.clear_chart()
+    #     self.chart_title.config(text="Prediction Results")
+    #
+    #     # Make predictions
+    #     y_pred = self.model.predict(self.X_test)
+    #
+    #     # Create comparison plot
+    #     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    #
+    #     # Plot 1: True vs Predicted
+    #     ax1.scatter(self.y_test, y_pred, alpha=0.5)
+    #     ax1.plot([self.y_test.min(), self.y_test.max()],
+    #              [self.y_test.min(), self.y_test.max()], 'r--', lw=2)
+    #     ax1.set_xlabel('True Values')
+    #     ax1.set_ylabel('Predicted Values')
+    #     ax1.set_title('True vs Predicted Values')
+    #
+    #     # Plot 2: Prediction line plot
+    #     sample_indices = range(min(50, len(self.y_test)))
+    #     ax2.plot(sample_indices, self.y_test[:50], 'b-', label='True', alpha=0.7)
+    #     ax2.plot(sample_indices, y_pred[:50], 'r-', label='Predicted', alpha=0.7)
+    #     ax2.set_xlabel('Sample Index')
+    #     ax2.set_ylabel('Value')
+    #     ax2.set_title('True vs Predicted (First 50 samples)')
+    #     ax2.legend()
+    #
+    #     plt.tight_layout()
+    #
+    #     # Embed in tkinter
+    #     canvas = FigureCanvasTkAgg(fig, self.chart_frame)
+    #     canvas.draw()
+    #     canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        self.clear_chart()
-        self.chart_title.config(text="Prediction Results")
-
-        # Make predictions
-        y_pred = self.model.predict(self.X_test)
-
-        # Create comparison plot
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-
-        # Plot 1: True vs Predicted
-        ax1.scatter(self.y_test, y_pred, alpha=0.5)
-        ax1.plot([self.y_test.min(), self.y_test.max()],
-                 [self.y_test.min(), self.y_test.max()], 'r--', lw=2)
-        ax1.set_xlabel('True Values')
-        ax1.set_ylabel('Predicted Values')
-        ax1.set_title('True vs Predicted Values')
-
-        # Plot 2: Prediction line plot
-        sample_indices = range(min(50, len(self.y_test)))
-        ax2.plot(sample_indices, self.y_test[:50], 'b-', label='True', alpha=0.7)
-        ax2.plot(sample_indices, y_pred[:50], 'r-', label='Predicted', alpha=0.7)
-        ax2.set_xlabel('Sample Index')
-        ax2.set_ylabel('Value')
-        ax2.set_title('True vs Predicted (First 50 samples)')
-        ax2.legend()
-
-        plt.tight_layout()
-
-        # Embed in tkinter
-        canvas = FigureCanvasTkAgg(fig, self.chart_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-
-def main():
-    root = tk.Tk()
-    app = OilPriceApp(root)
-    root.mainloop()
-
-
-if __name__ == "__main__":
-    main()
+#main
+root = tk.Tk()
+app = OilPriceApp(root)
+root.mainloop()
